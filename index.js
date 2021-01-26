@@ -7,18 +7,24 @@ const DEFAULT_API_MAX_PAGE_SIZE = 100;
 const DEFAULT_API_TIMEOUT = 10000;
 
 class LiskAdapter {
-  async load(options) {
+  constructor(options) {
     this.apiURL = options.apiURL;
     this.apiMaxPageSize = options.apiMaxPageSize || DEFAULT_API_MAX_PAGE_SIZE;
     this.apiTimeout = options.apiTimeout || DEFAULT_API_TIMEOUT;
   }
 
-  createTransfer({ amount, recipientAddress, message, passphrase }) {
+  async connect({ passphrase }) {
+    this.passphrase = passphrase;
+  }
+
+  async disconnect() {}
+
+  createTransfer({ amount, recipientAddress, message }) {
     return liskTransactions.transfer({
       amount: liskTransactions.utils.convertLSKToBeddows(amount.toString()).toString(),
       recipientId: recipientAddress,
       data: message,
-      passphrase,
+      passphrase: this.passphrase
     });
   }
 
@@ -53,7 +59,11 @@ class LiskAdapter {
         limit || this.apiMaxPageSize
       }&sort=timestamp:desc`
     );
-    return result.data.data;
+    let txnList = result.data.data;
+    for (let txn of txnList) {
+      txn.message = (txn.asset && txn.asset.data) || '';
+    }
+    return txnList;
   }
 
   async getAccountBalance({ address }) {
@@ -70,8 +80,6 @@ class LiskAdapter {
     }
     return balanceList[0].balance;
   }
-
-  async unload() {}
 }
 
 module.exports = LiskAdapter;
