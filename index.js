@@ -21,7 +21,7 @@ class LiskAdapter {
 
   createTransfer({ amount, recipientAddress, message }) {
     return liskTransactions.transfer({
-      amount: liskTransactions.utils.convertLSKToBeddows(amount.toString()).toString(),
+      amount,
       recipientId: recipientAddress,
       data: message,
       passphrase: this.passphrase
