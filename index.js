@@ -1,6 +1,9 @@
 const {Mnemonic} = require('@liskhq/lisk-passphrase');
-const liskCryptography = require('@liskhq/lisk-cryptography');
-const liskTransactions = require('@liskhq/lisk-transactions');
+// const liskTransactions = require('@liskhq/lisk-transactions');
+const {
+  cryptography: liskCryptography,
+} = require('@liskhq/lisk-client');
+
 const axios = require('axios');
 const LiskServiceRepository = require('./lisk-service/repository');
 const LiskWSClient = require('lisk-v3-ws-client-manager');
@@ -17,18 +20,19 @@ class LiskAdapter {
 
     async connect({passphrase}) {
         this.passphrase = passphrase;
+        // TODO 22 load account nonce
     }
 
     async disconnect() {
     }
 
     createTransfer({amount, recipientAddress, message}) {
-        return liskTransactions.transfer({
-            amount,
-            recipientId: recipientAddress,
-            data: message,
-            passphrase: this.passphrase,
-        });
+        // return liskTransactions.transfer({
+        //     amount,
+        //     recipientId: recipientAddress,
+        //     data: message,
+        //     passphrase: this.passphrase,
+        // });
     }
 
     createWallet() {
@@ -45,7 +49,9 @@ class LiskAdapter {
     }
 
     getAddressFromPassphrase({passphrase}) {
-        return liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase).address;
+        return liskCryptography.getBase32AddressFromAddress(
+          liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase).address
+        );
     }
 
     async postTransaction({transaction}) {
@@ -73,7 +79,7 @@ class LiskAdapter {
                 throw new Error('Invalid transaction response');
             }
         } catch (err) {
-            throw new Error(`Error broadcasting transaction to the lisk network. Failed with error ${err.message}`);
+            throw new Error(`Error broadcasting transaction to the lisk network - Failed with error ${err.message}`);
         }
         await this.liskWsClient.close();
     }
@@ -86,7 +92,7 @@ class LiskAdapter {
             }
             return transactions;
         } catch (err) {
-            throw new Error(`Failed to get transactions for address : ${address}, ErrMessage : ${err.message}`);
+            throw new Error(`Failed to get transactions for address ${address} - ${err.message}`);
         }
     }
 
@@ -101,8 +107,9 @@ class LiskAdapter {
             throw new Error(
                 `Failed to fetch account balance for wallet address ${
                     address
-                } - Could not find any balance records for that account
-          ErrMessage : ${err.message}`,
+                } - Could not find any balance records for that account - ${
+                  err.message
+                }`,
             );
         }
     }
