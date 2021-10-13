@@ -4,6 +4,7 @@ const {
   cryptography: liskCryptography,
 } = require('@liskhq/lisk-client');
 
+const crypto = require('crypto');
 const axios = require('axios');
 const LiskServiceRepository = require('./lisk-service/repository');
 const LiskWSClient = require('lisk-v3-ws-client-manager');
@@ -11,108 +12,116 @@ const LiskWSClient = require('lisk-v3-ws-client-manager');
 const DEFAULT_API_MAX_PAGE_SIZE = 100;
 
 class LiskAdapter {
-    constructor(options) {
-        this.apiURL = options.apiURL;
-        this.apiMaxPageSize = options.apiMaxPageSize || DEFAULT_API_MAX_PAGE_SIZE;
-        this.liskServiceRepo = new LiskServiceRepository({config: options});
-        this.liskWsClient = new LiskWSClient({config: options, logger: console});
-    }
+  constructor(options) {
+    this.serviceURL = options.serviceURL;
+    this.rpcURL = options.rpcURL;
+    this.apiMaxPageSize = options.apiMaxPageSize || DEFAULT_API_MAX_PAGE_SIZE;
+    this.liskServiceRepo = new LiskServiceRepository({config: options});
+    this.wsClient = null;
+    this.wsClientManager = new LiskWSClient({config: options, logger: console});
+  }
 
-    async connect({passphrase}) {
-        this.passphrase = passphrase;
-        // TODO 22 load account nonce
-    }
+  async connect({passphrase}) {
+    this.wsClient = await this.wsClientManager.createWsClient(true);
+    this.passphrase = passphrase;
+    let {address} = liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase);
+    this.address = liskCryptography.getBase32AddressFromAddress(address);
+    let account = await this.wsClient.account.get(address);
+    this.nonce = account.sequence.nonce;
+  }
 
-    async disconnect() {
-    }
+  async disconnect() {
+    await this.wsClientManager.close();
+  }
 
-    createTransfer({amount, recipientAddress, message}) {
-        // return liskTransactions.transfer({
-        //     amount,
-        //     recipientId: recipientAddress,
-        //     data: message,
-        //     passphrase: this.passphrase,
-        // });
-    }
+  async createTransfer({amount, fee, recipientAddress, message}) {
+    let transfer = await this.wsClient.transaction.create({
+      moduleID: 2,
+      assetID: 0,
+      fee: BigInt(fee),
+      asset: {
+        amount: BigInt(amount),
+        recipientAddress: liskCryptography.getAddressFromBase32Address(recipientAddress),
+        data: message
+      },
+      nonce: this.nonce++
+    }, this.passphrase);
 
-    createWallet() {
-        let passphrase = Mnemonic.generateMnemonic();
-        let address = this.getAddressFromPassphrase({passphrase});
-        return {
-            address,
-            passphrase,
-        };
-    }
+    transfer.id = crypto.createHash('sha256')
+      .update(`${this.address}-${transfer.nonce}`)
+      .digest('hex')
+      .slice(0, 44);
 
-    validatePassphrase({passphrase}) {
-        return Mnemonic.validateMnemonic(passphrase, Mnemonic.wordlists.english);
-    }
+    return transfer;
+  }
 
-    getAddressFromPassphrase({passphrase}) {
-        return liskCryptography.getBase32AddressFromAddress(
-          liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase).address
-        );
-    }
+  createWallet() {
+    let passphrase = Mnemonic.generateMnemonic();
+    let address = this.getAddressFromPassphrase({passphrase});
+    return {
+      address,
+      passphrase,
+    };
+  }
 
-    async postTransaction({transaction}) {
-        const wsClient = await this.liskWsClient.createWsClient();
-        let signedTxn = {
-            moduleID: transaction.moduleID,
-            assetID: transaction.assetID,
-            fee: BigInt(transaction.fee),
-            asset: {
-                amount: BigInt(transaction.amount),
-                recipientAddress: Buffer.from(transaction.recipientAddress, 'hex'),
-                data: transaction.message,
-            },
-            nonce: BigInt(transaction.nonce),
-            senderPublicKey: Buffer.from(transaction.senderPublicKey, 'hex'),
-            signatures: transaction.signatures.map((signaturePacket) => {
-                return Buffer.from(signaturePacket.signature, 'hex');
-            }),
-            id: Buffer.from(transaction.id, 'hex'),
-        };
+  validatePassphrase({passphrase}) {
+    return Mnemonic.validateMnemonic(passphrase, Mnemonic.wordlists.english);
+  }
 
-        try {
-            let response = await wsClient.transaction.send(signedTxn);
-            if (!response || !response.transactionId) {
-                throw new Error('Invalid transaction response');
-            }
-        } catch (err) {
-            throw new Error(`Error broadcasting transaction to the lisk network - Failed with error ${err.message}`);
-        }
-        await this.liskWsClient.close();
-    }
+  getAddressFromPassphrase({passphrase}) {
+    return liskCryptography.getBase32AddressFromAddress(
+      liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase).address
+    );
+  }
 
-    async getLatestOutboundTransactions({address, limit}) {
-        try {
-            const transactions = await this.liskServiceRepo.getOutboundTransactions(address, limit || this.apiMaxPageSize);
-            for (let txn of transactions) {
-                txn.message = (txn.asset && txn.asset.data) || '';
-            }
-            return transactions;
-        } catch (err) {
-            throw new Error(`Failed to get transactions for address ${address} - ${err.message}`);
-        }
+  async postTransaction({transaction}) {
+    try {
+      let response = await this.wsClient.transaction.send(transaction);
+      if (!response || !response.transactionId) {
+        throw new Error('Invalid transaction response');
+      }
+    } catch (err) {
+      throw new Error(`Error broadcasting transaction to the lisk network - Failed with error ${err.message}`);
     }
+  }
 
-    async getAccountBalance({address}) {
-        try {
-            const account = await this.liskServiceRepo.getAccountByAddress(address);
-            if (!account) {
-                throw `Account not found with address - ${address}`;
-            }
-            return account.summary.balance;
-        } catch (err) {
-            throw new Error(
-                `Failed to fetch account balance for wallet address ${
-                    address
-                } - Could not find any balance records for that account - ${
-                  err.message
-                }`,
-            );
-        }
+  async getLatestOutboundTransactions({address, limit}) {
+    try {
+      const transactions = await this.liskServiceRepo.getOutboundTransactions(address, limit || this.apiMaxPageSize);
+      for (let txn of transactions) {
+        txn.message = (txn.asset && txn.asset.data) || '';
+      }
+      return transactions;
+    } catch (err) {
+      throw new Error(`Failed to get transactions for address ${address} - ${err.message}`);
     }
+  }
+
+  async getAccountBalance({address}) {
+    try {
+      const account = await this.liskServiceRepo.getAccountByAddress(address);
+      if (!account) {
+        throw `Account not found with address - ${address}`;
+      }
+      return account.summary.balance;
+    } catch (err) {
+      throw new Error(
+        `Failed to fetch account balance for wallet address ${
+          address
+        } - Could not find any balance records for that account - ${
+          err.message
+        }`,
+      );
+    }
+  }
+
+  async getAccountNextKeyIndex({address}) {
+    const account = await this.liskServiceRepo.getAccountByAddress(address);
+    if (!account) {
+      throw `Account not found with address - ${address}`;
+    }
+    return Number(account.sequence.nonce);
+  }
 }
 
 module.exports = LiskAdapter;
