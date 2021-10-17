@@ -25,6 +25,15 @@ class LiskServiceRepository {
     return (await axios.get(`${this.apiURL}${metaStorePath}`, {params})).data;
   }
 
+  async post(metaStorePath, payload = {}) {
+    const response = await axios.post(`${this.apiURL}${metaStorePath}`, payload);
+    return response.data;
+  };
+
+  async postTransaction(payload) {
+    return this.post(metaStore.Transactions.path, payload);
+  };
+
   async getAccounts(filterParams) {
     return (await this.get(metaStore.Accounts.path, filterParams)).data;
   }

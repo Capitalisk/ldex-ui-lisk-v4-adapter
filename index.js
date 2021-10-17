@@ -1,15 +1,14 @@
 const {Mnemonic} = require('@liskhq/lisk-passphrase');
-// const liskTransactions = require('@liskhq/lisk-transactions');
-const {
-  cryptography: liskCryptography,
-} = require('@liskhq/lisk-client');
+const liskCryptography = require('@liskhq/lisk-cryptography');
+const liskTransactions = require('@liskhq/lisk-transactions');
+const liskCodec = require('@liskhq/lisk-codec');
 
 const crypto = require('crypto');
 const axios = require('axios');
 const LiskServiceRepository = require('./lisk-service/repository');
-const LiskWSClient = require('lisk-v3-ws-client-manager');
 
 const DEFAULT_API_MAX_PAGE_SIZE = 100;
+const DEFAULT_NETWORK_IDENTIFIER = '4c09e6a781fc4c7bdb936ee815de8f94190f8a7519becd9de2081832be309a99';
 
 class LiskAdapter {
   constructor(options) {
@@ -17,25 +16,81 @@ class LiskAdapter {
     this.rpcURL = options.rpcURL;
     this.apiMaxPageSize = options.apiMaxPageSize || DEFAULT_API_MAX_PAGE_SIZE;
     this.liskServiceRepo = new LiskServiceRepository({config: options});
-    this.wsClient = null;
-    this.wsClientManager = new LiskWSClient({config: options, logger: console});
+    this.transactionSchema = {
+      '$id': 'lisk/transaction',
+      type: 'object',
+      required: [
+        'moduleID',
+        'assetID',
+        'nonce',
+        'fee',
+        'senderPublicKey',
+        'asset'
+      ],
+      properties: {
+        moduleID: {
+          dataType: 'uint32',
+          fieldNumber: 1,
+          minimum: 2
+        },
+        assetID: {
+          dataType: 'uint32',
+          fieldNumber: 2
+        },
+        nonce: {
+          dataType: 'uint64',
+          fieldNumber: 3
+        },
+        fee: {
+          dataType: 'uint64',
+          fieldNumber: 4
+        },
+        senderPublicKey: {
+          dataType: 'bytes',
+          fieldNumber: 5,
+          minLength: 32,
+          maxLength: 32
+        },
+        asset: {
+          dataType: 'bytes',
+          fieldNumber: 6
+        },
+        signatures: {
+          type: 'array',
+          items: {
+            dataType: 'bytes'
+          },
+          fieldNumber: 7
+        }
+      }
+    };
+    this.transferAssetSchema = {
+      '$id': 'lisk/transfer-asset',
+      title: 'Transfer transaction asset',
+      type: 'object',
+      required: ['amount', 'recipientAddress', 'data'],
+      properties: {
+        amount: {dataType: 'uint64', fieldNumber: 1},
+        recipientAddress: {dataType: 'bytes', fieldNumber: 2, minLength: 20, maxLength: 20},
+        data: {dataType: 'string', fieldNumber: 3, minLength: 0, maxLength: 64}
+      }
+    };
+    this.networkId = Buffer.from(options.networkIdentifier || DEFAULT_NETWORK_IDENTIFIER, 'hex');
   }
 
   async connect({passphrase}) {
-    this.wsClient = await this.wsClientManager.createWsClient(true);
     this.passphrase = passphrase;
-    let {address} = liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase);
+    let {address, publicKey} = liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase);
     this.address = liskCryptography.getBase32AddressFromAddress(address);
-    let account = await this.wsClient.account.get(address);
-    this.nonce = account.sequence.nonce;
+    this.publicKey = publicKey;
+    let account = await this.liskServiceRepo.getAccountByAddress(this.address);
+    this.nonce = BigInt(account.sequence.nonce);
   }
 
-  async disconnect() {
-    await this.wsClientManager.close();
-  }
+  async disconnect() {}
 
   async createTransfer({amount, fee, recipientAddress, message}) {
-    let transfer = await this.wsClient.transaction.create({
+    let transactionData = {
       moduleID: 2,
       assetID: 0,
       fee: BigInt(fee),
@@ -44,11 +99,20 @@ class LiskAdapter {
         recipientAddress: liskCryptography.getAddressFromBase32Address(recipientAddress),
         data: message
       },
-      nonce: this.nonce++
-    }, this.passphrase);
+      nonce: this.nonce++,
+      senderPublicKey: this.publicKey,
+      signatures: []
+    };
+
+    let transfer = liskTransactions.signTransaction(
+      this.transferAssetSchema,
+      transactionData,
+      this.networkId,
+      this.passphrase
+    );
 
     transfer.id = crypto.createHash('sha256')
-      .update(`${this.address}-${transfer.nonce}`)
+      .update(`${this.address}-${transfer.nonce.toString()}`)
       .digest('hex')
       .slice(0, 44);
 
@@ -76,7 +140,15 @@ class LiskAdapter {
 
   async postTransaction({transaction}) {
     try {
-      let response = await this.wsClient.transaction.send(transaction);
+      const encodedAsset = liskCodec.codec.encode(this.transferAssetSchema, transaction.asset);
+      const encodedTransaction = liskCodec.codec.encode(this.transactionSchema, {
+        ...transaction,
+        asset: encodedAsset
+      });
+
+      let response = await this.liskServiceRepo.postTransaction({
+        transaction: encodedTransaction.toString('hex')
+      });
       if (!response || !response.transactionId) {
         throw new Error('Invalid transaction response');
       }
@@ -120,7 +192,7 @@ class LiskAdapter {
     if (!account) {
       throw `Account not found with address - ${address}`;
     }
-    return Number(account.sequence.nonce);
+    return account.sequence.nonce;
   }
 }
 
