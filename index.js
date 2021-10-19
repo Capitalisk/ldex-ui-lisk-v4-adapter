@@ -12,8 +12,6 @@ const DEFAULT_NETWORK_IDENTIFIER = '4c09e6a781fc4c7bdb936ee815de8f94190f8a7519be
 
 class LiskAdapter {
   constructor(options) {
-    this.serviceURL = options.serviceURL;
-    this.rpcURL = options.rpcURL;
     this.apiMaxPageSize = options.apiMaxPageSize || DEFAULT_API_MAX_PAGE_SIZE;
     this.liskServiceRepo = new LiskServiceRepository({config: options});
     this.transactionSchema = {
