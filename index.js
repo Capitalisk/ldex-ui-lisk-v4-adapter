@@ -81,8 +81,17 @@ class LiskAdapter {
     let {address, publicKey} = liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase);
     this.address = liskCryptography.getBase32AddressFromAddress(address);
     this.publicKey = publicKey;
-    let account = await this.liskServiceRepo.getAccountByAddress(this.address);
-    this.nonce = BigInt(account.sequence.nonce);
+    let account;
+    try {
+      account = await this.liskServiceRepo.getAccountByAddress(this.address);
+      this.nonce = BigInt(account.sequence.nonce);
+    } catch (error) {
+      if (error.response && error.response.status === 404) {
+        this.nonce = 0n;
+      } else {
+        throw error;
+      }
+    }
   }
 
   async disconnect() {}
