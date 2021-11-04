@@ -81,10 +81,18 @@ class LiskAdapter {
     let {address, publicKey} = liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase);
     this.address = liskCryptography.getBase32AddressFromAddress(address);
     this.publicKey = publicKey;
-    let account;
+    await this.updateNonce();
+  }
+
+  async disconnect() {}
+
+  async updateNonce() {
     try {
-      account = await this.liskServiceRepo.getAccountByAddress(this.address);
-      this.nonce = BigInt(account.sequence.nonce);
+      let account = await this.liskServiceRepo.getAccountByAddress(this.address);
+      let accountNonce = BigInt(account.sequence.nonce);
+      if (this.nonce == null || accountNonce > this.nonce) {
+        this.nonce = accountNonce;
+      }
     } catch (error) {
       if (error.response && error.response.status === 404) {
         this.nonce = 0n;
@@ -94,9 +102,9 @@ class LiskAdapter {
     }
   }
 
-  async disconnect() {}
-
   async createTransfer({amount, fee, recipientAddress, message}) {
+    await this.updateNonce();
+
     let transactionData = {
       moduleID: 2,
       assetID: 0,
