@@ -24,7 +24,7 @@
   "homepage": "https://github.com/Capitalisk/ldex-ui-lisk-v3-adapter#readme",
   "dependencies": {
     "@liskhq/lisk-codec": "^0.2.0",
-    "@liskhq/lisk-cryptography": "^3.1.0",
+    "@liskhq/lisk-cryptography": "^3.2.1",
     "@liskhq/lisk-passphrase": "^3.1.0",
     "@liskhq/lisk-transactions": "^5.1.1",
     "axios": "^0.21.4"
