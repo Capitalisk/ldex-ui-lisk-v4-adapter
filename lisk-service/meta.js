@@ -5,8 +5,8 @@
  */
 
 const Store = {
-  Accounts: {
-    path: '/api/v2/accounts',
+  Auth: {
+    path: '/api/v3/auth',
     filter: {
       address: 'address', // Resolves new and old address system
       publicKey: 'publicKey',
@@ -25,8 +25,18 @@ const Store = {
       randDesc: 'rank:desc',
     },
   },
+  Balances: {
+    path: '/v3/token/balances',
+    filter: {
+      address: 'address',
+    },
+    sortBy: {
+      balanceAsc: 'balance:asc',
+      balanceDesc: 'balance:desc',
+    },
+  },
   Blocks: {
-    path: '/api/v2/blocks',
+    path: '/api/v3/blocks',
     filter: {
       blockId: 'blockId',
       height: 'height', // Can be expressed as an interval ie. 1:20
@@ -46,11 +56,10 @@ const Store = {
     },
   },
   Transactions: {
-    path: '/api/v2/transactions',
+    path: '/api/v3/transactions',
     filter: {
       transactionId: 'transactionId',
-      moduleAssetId: 'moduleAssetId', // Transfer transaction: moduleID = 2,assetID = 0 eg. 2:0
-      moduleAssetName: 'moduleAssetName', // Transfer transaction: moduleName = token, assetName = transfer eg. token:transfer
+      moduleCommand: 'moduleCommand', // Transfer transaction: moduleName = token, assetName = transfer eg. token:transfer
       senderAddress: 'senderAddress',
       senderPublicKey: 'senderPublicKey',
       senderUsername: 'senderUsername',
@@ -59,7 +68,7 @@ const Store = {
       recipientUsername: 'recipientUsername',
       amount: 'amount', // Can be expressed as interval ie. 100000:200000
       timestamp: 'timestamp', // Can be expressed as interval ie. 100000:200000
-      blockId: 'blockId',
+      blockId: 'blockID',
       height: 'height',
       search: 'search', // Wildcard search
       data: 'data', // Wildcard search
@@ -75,66 +84,7 @@ const Store = {
       timestampAsc: 'timestamp:asc',
       timestampDesc: 'timestamp:desc',
     },
-  },
-  TransactionStats: {
-    path: '/api/v2/transactions/statistics/',
-    filter: {
-      interval: 'interval', // ['day', 'month']
-      limit: 'limit', // default 10
-      offset: 'offset', // default 0
-    },
-  },
-  TransactionSchema: {
-    path: '/api/v2/transactions/schemas',
-    filter: {
-      moduleAssetId: 'moduleAssetId', // Transfer transaction: moduleID = 2,assetID = 0 (ModuleId:AssetId /[0-9]+:[0-9]+/)
-      moduleAssetName: 'moduleAssetName', // Transfer transaction: moduleName = token, assetName = transfer (ModuleName:AssetName /[a-z]+:[a-z]+/)
-    },
-  },
-  Network: {
-    path: '/api/v2/peers',
-    filter: {
-      ip: 'ip',
-      networkVersion: 'networkVersion',
-      state: 'state', // ['connected', 'disconnected', 'any']
-      height: 'height',
-      limit: 'limit', // default 10
-      offset: 'offset', // default 0
-      sort: 'sort', // default "height:desc"
-    },
-    sortBy: {
-      heightAsc: 'height:asc',
-      heightDesc: 'height:desc',
-      networkVersionAsc: 'networkVersion:asc',
-      networkVersionDesc: 'networkVersion:desc',
-    },
-  },
-  SentVotes: {
-    path: '/api/v2/votes_sent',
-    filter: {
-      address: 'address', // Resolves only new address system
-      publicKey: 'publicKey',
-      username: 'username',
-    },
-  },
-  ReceivedVotes: {
-    path: '/api/v2/votes_received',
-    filter: {
-      address: 'address', // Resolves only new address system
-      publicKey: 'publicKey',
-      username: 'username',
-      aggregate: 'aggregate',
-      limit: 'limit', // default 10
-      offset: 'offset', // default 0
-    },
-  },
-  RoundForgers: {
-    path: '/api/v2/forgers',
-    filter: {
-      limit: 'limit', // default 10
-      offset: 'offset', // default 0
-    },
-  },
+  }
 };
 
 module.exports = Store;

@@ -1,2 +1,2 @@
-# ldex-ui-lisk-v3-adapter
+# ldex-ui-lisk-v4-adapter
 Lisk client adapter for LDEX UI.

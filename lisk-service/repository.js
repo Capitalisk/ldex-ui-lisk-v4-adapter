@@ -4,8 +4,9 @@ const axios = require('axios');
 const defaultTestNetURL = 'https://testnet-service.lisk.com';
 const defaultMainNetURL = 'https://service.lisk.com';
 
-class LiskServiceRepository {
+const LISK_TOKEN_ID = '0000000000000000';
 
+class LiskServiceRepository {
   constructor({config = {}, logger = console}) {
     let defaultURL = defaultMainNetURL;
     if (config.env === 'test') {
@@ -30,31 +31,37 @@ class LiskServiceRepository {
     return response.data;
   };
 
-  async postTransaction(payload) {
-    return this.post(metaStore.Transactions.path, payload);
+  async postTransaction(transaction) {
+    return this.post(metaStore.Transactions.path, { transaction });
   };
-
-  async getAccounts(filterParams) {
-    return (await this.get(metaStore.Accounts.path, filterParams)).data;
-  }
 
   async getTransactions(filterParams) {
     return (await this.get(metaStore.Transactions.path, filterParams)).data;
   }
 
-  async getAccountByAddress(walletAddress) {
-    const accounts = await this.getAccounts({
-      [metaStore.Accounts.filter.address]: walletAddress,
-    });
-    return accounts && accounts.length ? accounts[0] : null;
+  async getBalanceByAddress(walletAddress) {
+    const balance = (
+      await this.get(metaStore.Balances.path, {
+        [metaStore.Balances.filter.address]: walletAddress,
+      })
+    ).data.find(bal => bal.tokenID === LISK_TOKEN_ID);
+    return balance;
+  }
+
+  async getAuthByAddress(walletAddress) {
+    const authData = (
+      await this.get(metaStore.Auth.path, {
+        [metaStore.Auth.filter.address]: walletAddress,
+      })
+    ).data
+    return authData || null;
   }
 
   async getOutboundTransactions(senderAddress, limit) {
     const transactionFilterParams = {
       [metaStore.Transactions.filter.senderAddress]: senderAddress,
       [metaStore.Transactions.filter.limit]: limit,
-      [metaStore.Transactions.filter.moduleAssetId]: '2:0', // transfer transaction
-      [metaStore.Transactions.filter.moduleAssetName]: 'token:transfer', // token transfer,
+      [metaStore.Transactions.filter.moduleCommand]: 'token:transfer',
       [metaStore.Transactions.filter.sort]: metaStore.Transactions.sortBy.timestampDesc,
     };
     return this.getTransactions(transactionFilterParams);

@@ -1,6 +1,6 @@
 {
-  "name": "ldex-ui-lisk-v3-adapter",
-  "version": "1.4.1",
+  "name": "ldex-ui-lisk-v4-adapter",
+  "version": "4.0.0",
   "description": "Lisk client adapter for LDEX UI.",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Capitalisk/ldex-ui-lisk-v3-adapter.git"
+    "url": "git+https://github.com/Capitalisk/ldex-ui-lisk-v4-adapter.git"
   },
   "keywords": [
     "ldex",
@@ -19,14 +19,14 @@
   "author": "Jonathan Gros-Dubois",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Capitalisk/ldex-ui-lisk-v3-adapter/issues"
+    "url": "https://github.com/Capitalisk/ldex-ui-lisk-v4-adapter/issues"
   },
-  "homepage": "https://github.com/Capitalisk/ldex-ui-lisk-v3-adapter#readme",
+  "homepage": "https://github.com/Capitalisk/ldex-ui-lisk-v4-adapter#readme",
   "dependencies": {
-    "@liskhq/lisk-codec": "0.2.0",
-    "@liskhq/lisk-cryptography": "3.2.1",
-    "@liskhq/lisk-passphrase": "3.1.0",
-    "@liskhq/lisk-transactions": "5.1.1",
+    "@liskhq/lisk-codec": "0.5.0",
+    "@liskhq/lisk-cryptography": "4.1.0",
+    "@liskhq/lisk-passphrase": "4.1.0",
+    "@liskhq/lisk-transactions": "6.1.0",
     "axios": "^0.21.4"
   }
 }

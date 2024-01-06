@@ -8,72 +8,44 @@ const axios = require('axios');
 const LiskServiceRepository = require('./lisk-service/repository');
 
 const DEFAULT_API_MAX_PAGE_SIZE = 100;
-const DEFAULT_NETWORK_IDENTIFIER = '4c09e6a781fc4c7bdb936ee815de8f94190f8a7519becd9de2081832be309a99';
+const DEFAULT_CHAIN_ID = '00000000';
+const DEFAULT_TOKEN_ID = '0000000000000000';
 
 class LiskAdapter {
   constructor(options) {
     this.apiMaxPageSize = options.apiMaxPageSize || DEFAULT_API_MAX_PAGE_SIZE;
     this.liskServiceRepo = new LiskServiceRepository({config: options});
     this.transactionSchema = {
-      '$id': 'lisk/transaction',
+      $id: '/lisk/transferParams',
+      title: 'Transfer transaction params',
       type: 'object',
-      required: [
-        'moduleID',
-        'assetID',
-        'nonce',
-        'fee',
-        'senderPublicKey',
-        'asset'
-      ],
+      required: ['tokenID', 'amount', 'recipientAddress', 'data'],
       properties: {
-        moduleID: {
-          dataType: 'uint32',
+        tokenID: {
+          dataType: 'bytes',
           fieldNumber: 1,
-          minimum: 2
+          minLength: 8,
+          maxLength: 8,
         },
-        assetID: {
-          dataType: 'uint32',
-          fieldNumber: 2
-        },
-        nonce: {
+        amount: {
           dataType: 'uint64',
-          fieldNumber: 3
+          fieldNumber: 2,
         },
-        fee: {
-          dataType: 'uint64',
-          fieldNumber: 4
-        },
-        senderPublicKey: {
+        recipientAddress: {
           dataType: 'bytes',
-          fieldNumber: 5,
-          minLength: 32,
-          maxLength: 32
+          fieldNumber: 3,
+          format: 'lisk32',
         },
-        asset: {
-          dataType: 'bytes',
-          fieldNumber: 6
+        data: {
+          dataType: 'string',
+          fieldNumber: 4,
+          minLength: 0,
+          maxLength: 64,
         },
-        signatures: {
-          type: 'array',
-          items: {
-            dataType: 'bytes'
-          },
-          fieldNumber: 7
-        }
-      }
+      },
     };
-    this.transferAssetSchema = {
-      '$id': 'lisk/transfer-asset',
-      title: 'Transfer transaction asset',
-      type: 'object',
-      required: ['amount', 'recipientAddress', 'data'],
-      properties: {
-        amount: {dataType: 'uint64', fieldNumber: 1},
-        recipientAddress: {dataType: 'bytes', fieldNumber: 2, minLength: 20, maxLength: 20},
-        data: {dataType: 'string', fieldNumber: 3, minLength: 0, maxLength: 64}
-      }
-    };
-    this.networkId = Buffer.from(options.networkIdentifier || DEFAULT_NETWORK_IDENTIFIER, 'hex');
+    this.tokenId = Buffer.from(options.tokenId || DEFAULT_TOKEN_ID, 'hex');
+    this.chainId = Buffer.from(options.chainId || DEFAULT_CHAIN_ID, 'hex');
   }
 
   async connect({passphrase}) {
@@ -88,8 +60,8 @@ class LiskAdapter {
 
   async updateNonce() {
     try {
-      let account = await this.liskServiceRepo.getAccountByAddress(this.address);
-      let accountNonce = BigInt(account.sequence.nonce);
+      let auth = await this.liskServiceRepo.getAuthByAddress(this.address);
+      let accountNonce = BigInt(auth.nonce);
       if (this.nonce == null || accountNonce > this.nonce) {
         this.nonce = accountNonce;
       }
@@ -105,25 +77,29 @@ class LiskAdapter {
   async createTransfer({amount, fee, recipientAddress, message}) {
     await this.updateNonce();
 
-    let transactionData = {
-      moduleID: 2,
-      assetID: 0,
+    const transactionData = {
+      module: 'token',
+      command: 'transfer',
+      nonce: this.nonce,
       fee: BigInt(fee),
-      asset: {
+      senderPublicKey: this.publicKey,// TODO 0000 should this be string or buffer format????
+      signatures: [],
+      params: {
+        tokenID: this.tokenId,
+        recipientAddress: liskCryptography.address.getAddressFromLisk32Address(recipientAddress),
         amount: BigInt(amount),
-        recipientAddress: liskCryptography.getAddressFromBase32Address(recipientAddress),
         data: message
-      },
-      nonce: this.nonce++,
-      senderPublicKey: this.publicKey,
-      signatures: []
+      }
     };
 
+    let {privateKey} = liskCryptography.legacy.getPrivateAndPublicKeyFromPassphrase(this.passphrase);
+    // let {publicKey: signerPublicKey, privateKey} = liskCryptography.legacy.getPrivateAndPublicKeyFromPassphrase(this.passphrase);// TODO 000
+
     let transfer = liskTransactions.signTransaction(
-      this.transferAssetSchema,
       transactionData,
-      this.networkId,
-      this.passphrase
+      this.chainId,
+      privateKey,
+      this.transactionSchema
     );
 
     transfer.id = crypto.createHash('sha256')
@@ -155,15 +131,10 @@ class LiskAdapter {
 
   async postTransaction({transaction}) {
     try {
-      const encodedAsset = liskCodec.codec.encode(this.transferAssetSchema, transaction.asset);
-      const encodedTransaction = liskCodec.codec.encode(this.transactionSchema, {
-        ...transaction,
-        asset: encodedAsset
-      });
+      let binaryTxn = liskTransactions.getBytes(transaction, this.transactionSchema);
+      let payloadTxn = binaryTxn.toString('hex');
 
-      let response = await this.liskServiceRepo.postTransaction({
-        transaction: encodedTransaction.toString('hex')
-      });
+      let response = await this.liskServiceRepo.postTransaction(payloadTxn);
       if (!response || !response.transactionId) {
         throw new Error('Invalid transaction response');
       }
@@ -174,11 +145,7 @@ class LiskAdapter {
 
   async getLatestOutboundTransactions({address, limit}) {
     try {
-      const transactions = await this.liskServiceRepo.getOutboundTransactions(address, limit || this.apiMaxPageSize);
-      for (let txn of transactions) {
-        txn.message = (txn.asset && txn.asset.data) || '';
-      }
-      return transactions;
+      return await this.liskServiceRepo.getOutboundTransactions(address, limit || this.apiMaxPageSize);
     } catch (err) {
       throw new Error(`Failed to get transactions for address ${address} - ${err.message}`);
     }
@@ -186,11 +153,11 @@ class LiskAdapter {
 
   async getAccountBalance({address}) {
     try {
-      const account = await this.liskServiceRepo.getAccountByAddress(address);
-      if (!account) {
-        throw `Account not found with address - ${address}`;
+      const balance = await this.liskServiceRepo.getBalanceByAddress(address);
+      if (balance == null) {
+        throw `Account balance not found with address - ${address}`;
       }
-      return account.summary.balance;
+      return balance;
     } catch (err) {
       throw new Error(
         `Failed to fetch account balance for wallet address ${
@@ -203,11 +170,11 @@ class LiskAdapter {
   }
 
   async getAccountNextKeyIndex({address}) {
-    const account = await this.liskServiceRepo.getAccountByAddress(address);
-    if (!account) {
+    const auth = await this.liskServiceRepo.getAuthByAddress(address);
+    if (!auth) {
       throw `Account not found with address - ${address}`;
     }
-    return account.sequence.nonce;
+    return auth.nonce;
   }
 }
 
