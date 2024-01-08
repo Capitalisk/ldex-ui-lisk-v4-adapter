@@ -50,8 +50,8 @@ class LiskAdapter {
 
   async connect({passphrase}) {
     this.passphrase = passphrase;
-    let {address, publicKey} = liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase);
-    this.address = liskCryptography.getBase32AddressFromAddress(address);
+    let {publicKey} = liskCryptography.legacy.getPrivateAndPublicKeyFromPassphrase(passphrase);
+    this.address = liskCryptography.address.getLisk32AddressFromPublicKey(publicKey);
     this.publicKey = publicKey;
     await this.updateNonce();
   }
@@ -124,9 +124,9 @@ class LiskAdapter {
   }
 
   getAddressFromPassphrase({passphrase}) {
-    return liskCryptography.getBase32AddressFromAddress(
-      liskCryptography.getAddressAndPublicKeyFromPassphrase(passphrase).address
-    );
+    let {publicKey} = liskCryptography.legacy.getPrivateAndPublicKeyFromPassphrase(passphrase);
+    let address = liskCryptography.address.getLisk32AddressFromPublicKey(publicKey);
+    return liskCryptography.getBase32AddressFromAddress(address);
   }
 
   async postTransaction({transaction}) {
