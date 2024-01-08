@@ -125,8 +125,7 @@ class LiskAdapter {
 
   getAddressFromPassphrase({passphrase}) {
     let {publicKey} = liskCryptography.legacy.getPrivateAndPublicKeyFromPassphrase(passphrase);
-    let address = liskCryptography.address.getLisk32AddressFromPublicKey(publicKey);
-    return liskCryptography.getBase32AddressFromAddress(address);
+    return liskCryptography.address.getLisk32AddressFromPublicKey(publicKey);
   }
 
   async postTransaction({transaction}) {
