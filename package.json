@@ -1,6 +1,6 @@
 {
   "name": "ldex-ui-lisk-v4-adapter",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "Lisk client adapter for LDEX UI.",
   "main": "index.js",
   "scripts": {
