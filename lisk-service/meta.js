@@ -26,7 +26,7 @@ const Store = {
     },
   },
   Balances: {
-    path: '/v3/token/balances',
+    path: '/api/v3/token/balances',
     filter: {
       address: 'address',
     },
