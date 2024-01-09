@@ -134,7 +134,7 @@ class LiskAdapter {
       let payloadTxn = binaryTxn.toString('hex');
 
       let response = await this.liskServiceRepo.postTransaction(payloadTxn);
-      if (!response || !response.transactionId) {
+      if (!response || !response.transactionID) {
         throw new Error('Invalid transaction response');
       }
     } catch (err) {

@@ -45,7 +45,7 @@ class LiskServiceRepository {
         [metaStore.Balances.filter.address]: walletAddress,
       })
     ).data.find(bal => bal.tokenID === LISK_TOKEN_ID);
-    return balance;
+    return balance == null ? null : balance.availableBalance;
   }
 
   async getAuthByAddress(walletAddress) {
